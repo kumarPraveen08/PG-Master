@@ -1,5 +1,7 @@
 # PG Master
 
+Live site: https://kumarpraveen08.github.io/PG-Master/
+
 A browser app for learning PostgreSQL. **Learn** is a reading path through storage, memory, MVCC, vacuum, WAL, replication, and production troubleshooting. **Practice** is a sequence of SQL exercises with a task, a schema, a query editor, and a result console.
 
 Queries are checked in the browser. There is no database server to install. A correct answer is matched against the exercise pattern and shown with sample rows.
@@ -50,6 +52,12 @@ src/
 Documentation lives in `src/_data/DocModule.tsx`. Each module has chapters with optional body text, key points, a diagram, terms, commands, and a warning.
 
 Exercises live in `src/_data/ExcerciseModule.tsx`. Each level needs an `id`, teaching text, a task, a schema, a `regex` that accepts a correct query, a success message, a hint, and `mockData` to show in the console. `resultType` is `"data"` when the console should render rows, or `"command"` when the statement returns no rows.
+
+## GitHub Pages
+
+Pushes to `main` build the app and deploy it with GitHub Actions (`.github/workflows/pages.yml`). The production build uses the `/PG-Master/` base path so scripts and styles load on GitHub Pages. Local `pnpm dev` still uses `/`.
+
+In the repository settings, set **Pages** → **Build and deployment** → **Source** to **GitHub Actions** if the first deploy does not start on its own.
 
 ## Stack
 
