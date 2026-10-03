@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#010409"/>
+  <rect x="80" y="165" width="160" height="160" rx="36" fill="#0d1117"/>
+  <path fill="#10b981" d="M116 221c0-14 24-26 54-26s54 12 54 26-24 26-54 26-54-12-54-26z"/>
+  <path fill="#10b981" d="M116 247v26c0 14 24 26 54 26s54-12 54-26v-26c-10 10-30 16-54 16s-44-6-54-16z"/>
+  <path fill="#34d399" d="M116 293v28c0 14 24 26 54 26s54-12 54-26v-28c-10 10-30 16-54 16s-44-6-54-16z"/>
+  <text x="280" y="250" fill="#f3f4f6" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="84" font-weight="700">PG Master</text>
+  <text x="280" y="330" fill="#9ca3af" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="36">Learn PostgreSQL in the browser</text>
+</svg>
