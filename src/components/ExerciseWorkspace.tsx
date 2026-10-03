@@ -214,7 +214,7 @@ function TaskPanel({
           ) : (
             <div>
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
-                Database Schema
+                Tables, columns, and sample rows
               </h3>
               <pre className="whitespace-pre-wrap rounded-lg border border-gray-700 bg-[#1c2128] p-4 font-mono text-sm leading-relaxed text-blue-300">
                 {level.schema}
@@ -360,7 +360,8 @@ function ConsoleOutput({
                 )}
               </div>
 
-              {result.resultType === "data" && result.data.length > 0 && (
+              {(result.resultType === "data" || result.resultType === "command") &&
+                result.data.length > 0 && (
                 <div className="flex-1 overflow-auto rounded-lg border border-gray-800 bg-[#010409]">
                   <table className="w-full whitespace-nowrap border-collapse text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-[#161b22]">
@@ -386,7 +387,11 @@ function ConsoleOutput({
                               key={column}
                               className="px-5 py-2.5 font-mono text-sm text-gray-300"
                             >
-                              {value == null ? "" : String(value)}
+                              {value == null ? (
+                                <span className="text-gray-500">NULL</span>
+                              ) : (
+                                String(value)
+                              )}
                             </td>
                           ))}
                         </tr>
@@ -396,7 +401,7 @@ function ConsoleOutput({
                 </div>
               )}
 
-              {result.resultType === "command" && (
+              {result.resultType === "command" && result.data.length === 0 && (
                 <div className="flex items-center rounded-lg border border-gray-800 bg-[#010409] p-3 font-mono text-sm text-gray-500">
                   <Info size={16} className="mr-2" />
                   Command executed successfully. No rows returned.

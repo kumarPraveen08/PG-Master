@@ -1,3 +1,5 @@
+import { EXERCISE_CONTEXT } from "./exerciseContext";
+
 type ExcerciseLevel = {
   id: string;
   title: string;
@@ -18,7 +20,7 @@ type ExcerciseModule = {
   levels: ExcerciseLevel[];
 };
 
-export const EXERCISE_MODULES: ExcerciseModule[] = [
+const EXERCISE_MODULES_RAW: ExcerciseModule[] = [
   // =========================================================
   // MODULE 1 — BASICS & ENVIRONMENT
   // =========================================================
@@ -3334,3 +3336,15 @@ export const EXERCISE_MODULES: ExcerciseModule[] = [
     ],
   },
 ];
+
+export const EXERCISE_MODULES: ExcerciseModule[] = EXERCISE_MODULES_RAW.map(
+  (module) => ({
+    ...module,
+    levels: module.levels.map((level) => {
+      const context = EXERCISE_CONTEXT[level.id];
+      return context
+        ? { ...level, schema: context.schema, mockData: context.mockData }
+        : level;
+    }),
+  }),
+);
