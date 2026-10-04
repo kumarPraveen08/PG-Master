@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   Award,
@@ -19,6 +19,9 @@ import { SplitPane } from "./SplitPane";
 
 type ExerciseLevel = (typeof EXERCISE_MODULES)[number]["levels"][number];
 type LeftTab = "learn" | "schema";
+type EditorMode = "query" | "terminal";
+
+const EDITOR_MODE_KEY = "pg-learner-editor-mode";
 
 type QueryResult =
   | { type: "error"; message: string }
@@ -28,6 +31,20 @@ type QueryResult =
       resultType: string;
       data: Record<string, unknown>[];
     };
+
+function loadEditorMode(): EditorMode {
+  try {
+    return localStorage.getItem(EDITOR_MODE_KEY) === "terminal" ? "terminal" : "query";
+  } catch {
+    return "query";
+  }
+}
+
+function hasFollowingLevel(levelId: string) {
+  const levels = EXERCISE_MODULES.flatMap((module) => module.levels);
+  const index = levels.findIndex((level) => level.id === levelId);
+  return index !== -1 && index < levels.length - 1;
+}
 
 type ExerciseWorkspaceProps = {
   level: ExerciseLevel;
@@ -48,40 +65,61 @@ export function ExerciseWorkspace({
   const [showHint, setShowHint] = useState(false);
   const [taskMinimized, setTaskMinimized] = useState(false);
   const [consoleMinimized, setConsoleMinimized] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>(loadEditorMode);
+  const [seenLevelId, setSeenLevelId] = useState(level.id);
 
-  useEffect(() => {
+  if (seenLevelId !== level.id) {
+    setSeenLevelId(level.id);
     setQuery("");
     setResult(null);
     setShowHint(false);
     setActiveTab("learn");
-  }, [level.id]);
+  }
 
-  const runQuery = () => {
+  useEffect(() => {
+    try {
+      localStorage.setItem(EDITOR_MODE_KEY, editorMode);
+    } catch {
+      // Preference is optional if storage is unavailable.
+    }
+  }, [editorMode]);
+
+  const execute = (sql: string): QueryResult => {
     setConsoleMinimized(false);
 
-    if (!query.trim()) {
-      setResult({ type: "error", message: "Please enter a SQL query." });
-      return;
+    if (!sql.trim()) {
+      const nextResult: QueryResult = { type: "error", message: "Please enter a SQL query." };
+      setResult(nextResult);
+      return nextResult;
     }
 
-    const normalizedQuery = query.replace(/\s+/g, " ").trim().toLowerCase();
+    const normalizedQuery = sql.replace(/\s+/g, " ").trim().toLowerCase();
 
     if (level.regex.test(normalizedQuery)) {
-      setResult({
+      const nextResult: QueryResult = {
         type: "success",
         message: level.successMessage,
         resultType: level.resultType,
         data: level.mockData,
-      });
+      };
+      setResult(nextResult);
       if (!completed) onComplete();
-      return;
+      return nextResult;
     }
 
-    setResult({
+    const nextResult: QueryResult = {
       type: "error",
       message: "Syntax error or incorrect logic. Check your query against the requirements.",
-    });
+    };
+    setResult(nextResult);
+    return nextResult;
   };
+
+  const runQuery = () => {
+    execute(query);
+  };
+
+  const canAdvance = completed && result?.type === "success" && hasFollowingLevel(level.id);
 
   return (
     <div className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -108,20 +146,37 @@ export function ExerciseWorkspace({
             maxPercent={80}
             collapsed={consoleMinimized ? "second" : null}
             first={
-              <QueryEditor
-                query={query}
-                hint={level.hint}
-                showHint={showHint}
-                onQueryChange={setQuery}
-                onToggleHint={() => setShowHint((open) => !open)}
-                onRun={runQuery}
-              />
+              editorMode === "query" ? (
+                <QueryEditor
+                  query={query}
+                  hint={level.hint}
+                  showHint={showHint}
+                  onQueryChange={setQuery}
+                  onToggleHint={() => setShowHint((open) => !open)}
+                  onRun={runQuery}
+                  onModeChange={setEditorMode}
+                />
+              ) : (
+                <SqlTerminal
+                  key={level.id}
+                  query={query}
+                  hint={level.hint}
+                  showHint={showHint}
+                  canAdvance={canAdvance}
+                  finished={completed && result?.type === "success" && !hasFollowingLevel(level.id)}
+                  onQueryChange={setQuery}
+                  onToggleHint={() => setShowHint((open) => !open)}
+                  onExecute={execute}
+                  onNext={onNext}
+                  onModeChange={setEditorMode}
+                />
+              )
             }
             second={
               <ConsoleOutput
                 result={result}
                 minimized={consoleMinimized}
-                showNext={completed && result?.type === "success"}
+                showNext={editorMode === "query" && completed && result?.type === "success"}
                 onToggleMinimized={() => setConsoleMinimized((open) => !open)}
                 onNext={onNext}
               />
@@ -227,6 +282,44 @@ function TaskPanel({
   );
 }
 
+function EditorModeSwitch({
+  mode,
+  onChange,
+}: {
+  mode: EditorMode;
+  onChange: (mode: EditorMode) => void;
+}) {
+  const options: { id: EditorMode; label: string; icon: typeof Code2 }[] = [
+    { id: "query", label: "query.sql", icon: Code2 },
+    { id: "terminal", label: "terminal", icon: TerminalSquare },
+  ];
+
+  return (
+    <div className="flex shrink-0 items-center rounded-md border border-gray-700 bg-[#0d1117] p-0.5">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const active = mode === option.id;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onChange(option.id)}
+            className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+              active
+                ? "bg-gray-800 text-gray-100"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+            aria-pressed={active}
+          >
+            <Icon size={14} />
+            <span>{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function QueryEditor({
   query,
   hint,
@@ -234,6 +327,7 @@ function QueryEditor({
   onQueryChange,
   onToggleHint,
   onRun,
+  onModeChange,
 }: {
   query: string;
   hint: string;
@@ -241,14 +335,12 @@ function QueryEditor({
   onQueryChange: (value: string) => void;
   onToggleHint: () => void;
   onRun: () => void;
+  onModeChange: (mode: EditorMode) => void;
 }) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[#010409]">
-      <div className="flex min-h-12 items-center justify-between border-b border-gray-800 bg-[#161b22] px-4 py-2">
-        <div className="flex items-center space-x-2 text-sm font-medium text-gray-400">
-          <Code2 size={16} />
-          <span>query.sql</span>
-        </div>
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-gray-800 bg-[#161b22] px-3 py-2">
+        <EditorModeSwitch mode="query" onChange={onModeChange} />
         <div className="flex items-center space-x-2">
           <button
             onClick={onToggleHint}
@@ -295,6 +387,219 @@ function QueryEditor({
           spellCheck="false"
         />
       </div>
+    </div>
+  );
+}
+
+function SqlTerminal({
+  query,
+  hint,
+  showHint,
+  canAdvance,
+  finished,
+  onQueryChange,
+  onToggleHint,
+  onExecute,
+  onNext,
+  onModeChange,
+}: {
+  query: string;
+  hint: string;
+  showHint: boolean;
+  canAdvance: boolean;
+  finished: boolean;
+  onQueryChange: (value: string) => void;
+  onToggleHint: () => void;
+  onExecute: (sql: string) => QueryResult;
+  onNext: () => void;
+  onModeChange: (mode: EditorMode) => void;
+}) {
+  const [history, setHistory] = useState<{ id: number; command: string; result: QueryResult }[]>(
+    [],
+  );
+  const nextId = useRef(1);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [canAdvance]);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [query]);
+
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    scroll.scrollTop = scroll.scrollHeight;
+  }, [history, canAdvance, finished]);
+
+  const submit = () => {
+    if (!query.trim()) {
+      if (canAdvance) onNext();
+      return;
+    }
+
+    const result = onExecute(query);
+    setHistory((entries) => [...entries, { id: nextId.current++, command: query, result }]);
+    onQueryChange("");
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col bg-[#010409]">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-gray-800 bg-[#161b22] px-3 py-2">
+        <EditorModeSwitch mode="terminal" onChange={onModeChange} />
+        <button
+          type="button"
+          onClick={onToggleHint}
+          className={`flex items-center space-x-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+            showHint
+              ? "bg-yellow-900/30 text-yellow-400"
+              : "text-gray-400 hover:bg-gray-800 hover:text-yellow-400"
+          }`}
+        >
+          <Lightbulb size={14} />
+          <span className="hidden sm:inline">{showHint ? "Hide Hint" : "Show Hint"}</span>
+        </button>
+      </div>
+
+      {showHint && (
+        <div className="flex items-start space-x-3 border-b border-yellow-900/50 bg-yellow-900/20 px-4 py-3">
+          <Info size={16} className="mt-0.5 shrink-0 text-yellow-500" />
+          <div>
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-yellow-500">
+              Hint
+            </span>
+            <code className="font-mono text-sm text-yellow-200/90">{hint}</code>
+          </div>
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4 font-mono text-sm leading-relaxed"
+        onMouseDown={(event) => {
+          if ((event.target as HTMLElement).closest("button, a, textarea")) return;
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}
+      >
+        {history.length === 0 && (
+          <p className="mb-4 text-gray-500">Type a query, then press Enter to run it.</p>
+        )}
+
+        <div className="space-y-4">
+          {history.map((entry) => (
+            <div key={entry.id}>
+              <PromptLines command={entry.command} />
+              <TerminalResult result={entry.result} />
+            </div>
+          ))}
+        </div>
+
+        {canAdvance && (
+          <p className="mt-4 text-emerald-400">Press Enter to go to the next exercise.</p>
+        )}
+        {finished && (
+          <p className="mt-4 text-emerald-400">You finished the last exercise.</p>
+        )}
+      </div>
+
+      <div className="border-t border-gray-800 bg-[#0d1117]">
+        <div className="flex items-start gap-2 px-4 py-3">
+          <span className="select-none pt-0.5 font-mono text-sm text-emerald-400">postgres=#</span>
+          <textarea
+            ref={inputRef}
+            value={query}
+            rows={1}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey) return;
+              event.preventDefault();
+              submit();
+            }}
+            placeholder={canAdvance ? "" : "SELECT ..."}
+            className="max-h-40 min-h-6 flex-1 resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-gray-200 focus:outline-none"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+        </div>
+        <div className="border-t border-gray-800/80 px-4 py-1.5 text-[11px] text-gray-500">
+          {query.trim()
+            ? "Enter runs the query · Shift+Enter inserts a new line"
+            : canAdvance
+              ? "Press Enter to go to the next exercise"
+              : "Enter runs the query · Shift+Enter inserts a new line"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PromptLines({ command }: { command: string }) {
+  return (
+    <div>
+      {command.split("\n").map((line, index) => (
+        <div key={index} className="flex">
+          <span className="shrink-0 select-none text-emerald-400">
+            {index === 0 ? "postgres=# " : "postgres-# "}
+          </span>
+          <span className="whitespace-pre-wrap text-gray-200">{line || " "}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TerminalResult({ result }: { result: QueryResult }) {
+  if (result.type === "error") {
+    return <p className="mt-2 text-red-300">{result.message}</p>;
+  }
+
+  const columns = result.data.length > 0 ? Object.keys(result.data[0]) : [];
+
+  return (
+    <div className="mt-2 space-y-2">
+      <p className="text-emerald-400">{result.message}</p>
+      {columns.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="border-collapse text-left text-xs">
+            <thead>
+              <tr>
+                {columns.map((column) => (
+                  <th key={column} className="border-b border-gray-700 px-3 py-1 font-medium text-gray-400">
+                    {column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {result.data.map((row, index) => (
+                <tr key={index}>
+                  {columns.map((column) => (
+                    <td key={column} className="px-3 py-1 text-gray-300">
+                      {row[column] == null ? (
+                        <span className="text-gray-500">NULL</span>
+                      ) : (
+                        String(row[column])
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {result.resultType === "command" && result.data.length === 0 && (
+        <p className="text-gray-500">Command executed successfully. No rows returned.</p>
+      )}
     </div>
   );
 }
