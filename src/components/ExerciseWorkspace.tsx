@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   AlertCircle,
   Award,
@@ -67,6 +67,7 @@ export function ExerciseWorkspace({
   const [consoleMinimized, setConsoleMinimized] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>(loadEditorMode);
   const [seenLevelId, setSeenLevelId] = useState(level.id);
+  const commandHistory = useRef<string[]>([]);
 
   if (seenLevelId !== level.id) {
     setSeenLevelId(level.id);
@@ -74,6 +75,7 @@ export function ExerciseWorkspace({
     setResult(null);
     setShowHint(false);
     setActiveTab("learn");
+    commandHistory.current = [];
   }
 
   useEffect(() => {
@@ -169,6 +171,7 @@ export function ExerciseWorkspace({
                   onExecute={execute}
                   onNext={onNext}
                   onModeChange={setEditorMode}
+                  commandHistory={commandHistory}
                 />
               )
             }
@@ -402,6 +405,7 @@ function SqlTerminal({
   onExecute,
   onNext,
   onModeChange,
+  commandHistory,
 }: {
   query: string;
   hint: string;
@@ -413,6 +417,7 @@ function SqlTerminal({
   onExecute: (sql: string) => QueryResult;
   onNext: () => void;
   onModeChange: (mode: EditorMode) => void;
+  commandHistory: RefObject<string[]>;
 }) {
   const [history, setHistory] = useState<{ id: number; command: string; result: QueryResult }[]>(
     [],
@@ -420,6 +425,9 @@ function SqlTerminal({
   const nextId = useRef(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const historyIndex = useRef(commandHistory.current.length);
+  const draft = useRef(query);
+  const moveCaretToEnd = useRef(false);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -430,6 +438,10 @@ function SqlTerminal({
     if (!input) return;
     input.style.height = "0px";
     input.style.height = `${input.scrollHeight}px`;
+    if (!moveCaretToEnd.current) return;
+    moveCaretToEnd.current = false;
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
   }, [query]);
 
   useEffect(() => {
@@ -445,9 +457,32 @@ function SqlTerminal({
     }
 
     const result = onExecute(query);
+    commandHistory.current.push(query);
+    historyIndex.current = commandHistory.current.length;
+    draft.current = "";
     setHistory((entries) => [...entries, { id: nextId.current++, command: query, result }]);
     onQueryChange("");
     inputRef.current?.focus();
+  };
+
+  const recallCommand = (direction: -1 | 1) => {
+    const commands = commandHistory.current;
+    const index = historyIndex.current;
+
+    if (direction === -1) {
+      if (commands.length === 0 || index === 0) return false;
+      if (index === commands.length) draft.current = query;
+      historyIndex.current = index - 1;
+    } else {
+      if (index >= commands.length) return false;
+      historyIndex.current = index + 1;
+    }
+
+    moveCaretToEnd.current = true;
+    onQueryChange(
+      historyIndex.current === commands.length ? draft.current : commands[historyIndex.current],
+    );
+    return true;
   };
 
   return (
@@ -517,8 +552,34 @@ function SqlTerminal({
             ref={inputRef}
             value={query}
             rows={1}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (historyIndex.current === commandHistory.current.length) draft.current = value;
+              onQueryChange(value);
+            }}
             onKeyDown={(event) => {
+              if (
+                (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+                !event.altKey &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.shiftKey
+              ) {
+                const area = inputRef.current;
+                if (!area || area.selectionStart !== area.selectionEnd) return;
+                const before = area.value.slice(0, area.selectionStart);
+                const after = area.value.slice(area.selectionEnd);
+                const atFirstLine = !before.includes("\n");
+                const atLastLine = !after.includes("\n");
+                if (event.key === "ArrowUp" && !atFirstLine) return;
+                if (event.key === "ArrowDown" && !atLastLine) return;
+                const recalled = recallCommand(event.key === "ArrowUp" ? -1 : 1);
+                if (recalled || (event.key === "ArrowUp" && commandHistory.current.length > 0)) {
+                  event.preventDefault();
+                }
+                return;
+              }
+
               if (event.key !== "Enter" || event.shiftKey) return;
               event.preventDefault();
               submit();
@@ -532,10 +593,10 @@ function SqlTerminal({
         </div>
         <div className="border-t border-gray-800/80 px-4 py-1.5 text-[11px] text-gray-500">
           {query.trim()
-            ? "Enter runs the query · Shift+Enter inserts a new line"
+            ? "Enter runs the query · Shift+Enter inserts a new line · ↑↓ recalls commands"
             : canAdvance
               ? "Press Enter to go to the next exercise"
-              : "Enter runs the query · Shift+Enter inserts a new line"}
+              : "Enter runs the query · Shift+Enter inserts a new line · ↑↓ recalls commands"}
         </div>
       </div>
     </div>
