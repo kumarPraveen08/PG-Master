@@ -8,16 +8,18 @@ export type StoredProgress = {
   expandedModules: string[];
 };
 
+export const DEFAULT_PROGRESS: StoredProgress = {
+  completedLevels: [],
+  currentLevelId: "1-1",
+  expandedModules: ["mod-1"],
+};
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 export function loadProgress(): StoredProgress {
-  const fallback: StoredProgress = {
-    completedLevels: [],
-    currentLevelId: "1-1",
-    expandedModules: ["mod-1"],
-  };
+  const fallback: StoredProgress = { ...DEFAULT_PROGRESS };
 
   try {
     const raw = localStorage.getItem(PROGRESS_KEY);

@@ -6,7 +6,12 @@ import { CertificateModal } from "./components/CertificateModal";
 import { DocsView } from "./components/DocsView";
 import { ExerciseWorkspace } from "./components/ExerciseWorkspace";
 import { Sidebar } from "./components/Sidebar";
-import { PROGRESS_KEY, loadProgress, type StoredProgress } from "./lib/progress";
+import {
+  DEFAULT_PROGRESS,
+  PROGRESS_KEY,
+  loadProgress,
+  type StoredProgress,
+} from "./lib/progress";
 
 export default function App() {
   const [appMode, setAppMode] = useState<AppMode>("exercise");
@@ -101,6 +106,22 @@ export default function App() {
     }
   };
 
+  const selectLevel = (levelId: string) => {
+    setCurrentLevelId(levelId);
+    const moduleId = EXERCISE_MODULES.find((module) =>
+      module.levels.some((level) => level.id === levelId),
+    )?.id;
+    if (!moduleId) return;
+    setExpandedModules((prev) => (prev.includes(moduleId) ? prev : [...prev, moduleId]));
+  };
+
+  const resetProgress = () => {
+    setCompletedLevels([...DEFAULT_PROGRESS.completedLevels]);
+    setCurrentLevelId(DEFAULT_PROGRESS.currentLevelId);
+    setExpandedModules([...DEFAULT_PROGRESS.expandedModules]);
+    setShowCertificate(false);
+  };
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#010409] font-sans text-gray-300 selection:bg-emerald-500/30">
       <AppHeader
@@ -128,7 +149,8 @@ export default function App() {
           onToggleModule={(moduleId) =>
             setExpandedModules((prev) => toggleId(prev, moduleId))
           }
-          onSelectLevel={setCurrentLevelId}
+          onSelectLevel={selectLevel}
+          onResetProgress={resetProgress}
           onCloseMobile={() => setIsSidebarOpen(false)}
         />
 
